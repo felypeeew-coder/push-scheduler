@@ -105,6 +105,21 @@ def run():
 
     return jsonify({'ok': True, 'enviados': enviados, 'erros': erros})
 
+@app.route('/debug')
+def debug():
+    token    = request.args.get('token', '').strip()
+    expected = os.environ.get('SCHEDULER_TOKEN', '').strip().lstrip('=')
+    if not expected or token != expected:
+        return jsonify({'error': 'unauthorized'}), 401
+    sheet_id = os.environ.get('GSHEETS_SPREADSHEET_ID', '').strip().lstrip('=')
+    try:
+        svc  = _sheets_service()
+        meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+        abas = [s['properties']['title'] for s in meta.get('sheets', [])]
+        return jsonify({'spreadsheet': meta.get('properties', {}).get('title'), 'abas': abas})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 @app.route('/')
 def index():
     return jsonify({'status': 'push-scheduler online'})
