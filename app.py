@@ -13,6 +13,19 @@ app = Flask(__name__)
 SP       = ZoneInfo('America/Sao_Paulo')
 FORMATOS = ['%d/%m/%Y %H:%M', '%Y-%m-%d %H:%M', '%d/%m/%Y %H:%M:%S']
 
+DIAS_PT = {
+    0: 'Segunda',
+    1: 'Terça',
+    2: 'Quarta',
+    3: 'Quinta',
+    4: 'Sexta',
+    5: 'Sábado',
+    6: 'Domingo',
+}
+
+def _aba_hoje():
+    return DIAS_PT[datetime.now(SP).weekday()]
+
 def _parse_dt(s):
     for fmt in FORMATOS:
         try:
@@ -39,12 +52,20 @@ def run():
     sheet_id = os.environ.get('GSHEETS_SPREADSHEET_ID', '').strip().lstrip('=')
     pa_key   = os.environ.get('PUSHALERT_API_KEY', '').strip().lstrip('=')
 
+    aba    = _aba_hoje()
     svc    = _sheets_service()
     sheets = svc.spreadsheets()
-    result = sheets.values().get(spreadsheetId=sheet_id, range='A2:H1000').execute()
-    rows   = result.get('values', [])
 
-    agora    = datetime.now(SP)
+    try:
+        result = sheets.values().get(
+            spreadsheetId=sheet_id,
+            range=f'{aba}!A2:H1000'
+        ).execute()
+    except Exception as e:
+        return jsonify({'error': f'Aba "{aba}" não encontrada: {str(e)}'}), 400
+
+    rows  = result.get('values', [])
+    agora = datetime.now(SP)
     enviados, erros = [], []
 
     for i, row in enumerate(rows):
@@ -58,7 +79,7 @@ def run():
         dt = _parse_dt(data_hora.strip())
         if dt is None:
             sheets.values().update(spreadsheetId=sheet_id,
-                range=f'G{i+2}',
+                range=f'{aba}!G{i+2}',
                 valueInputOption='RAW',
                 body={'values': [['erro: data inválida']]}).execute()
             erros.append({'linha': i+2, 'erro': 'data inválida'})
@@ -91,19 +112,19 @@ def run():
 
             notif_id = str(resp_data.get('id', ''))
             sheets.values().update(spreadsheetId=sheet_id,
-                range=f'G{i+2}:H{i+2}',
+                range=f'{aba}!G{i+2}:H{i+2}',
                 valueInputOption='RAW',
                 body={'values': [['enviado', notif_id]]}).execute()
             enviados.append({'linha': i+2, 'titulo': titulo, 'id': notif_id})
 
         except Exception as e:
             sheets.values().update(spreadsheetId=sheet_id,
-                range=f'G{i+2}',
+                range=f'{aba}!G{i+2}',
                 valueInputOption='RAW',
                 body={'values': [[f'erro: {str(e)[:80]}']]}).execute()
             erros.append({'linha': i+2, 'erro': str(e)})
 
-    return jsonify({'ok': True, 'enviados': enviados, 'erros': erros})
+    return jsonify({'ok': True, 'aba': aba, 'enviados': enviados, 'erros': erros})
 
 @app.route('/debug')
 def debug():
@@ -116,13 +137,13 @@ def debug():
         svc  = _sheets_service()
         meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
         abas = [s['properties']['title'] for s in meta.get('sheets', [])]
-        return jsonify({'spreadsheet': meta.get('properties', {}).get('title'), 'abas': abas})
+        return jsonify({'spreadsheet': meta.get('properties', {}).get('title'), 'abas': abas, 'aba_hoje': _aba_hoje()})
     except Exception as e:
         return jsonify({'error': str(e)})
 
 @app.route('/')
 def index():
-    return jsonify({'status': 'push-scheduler online'})
+    return jsonify({'status': 'push-scheduler online', 'aba_hoje': _aba_hoje()})
 
 if __name__ == '__main__':
     app.run(debug=True)
