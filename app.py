@@ -41,7 +41,7 @@ def run():
 
     svc    = _sheets_service()
     sheets = svc.spreadsheets()
-    result = sheets.values().get(spreadsheetId=sheet_id, range='PushAlert Envios!A2:H1000').execute()
+    result = sheets.values().get(spreadsheetId=sheet_id, range='PushAlertEnvios!A2:H1000').execute()
     rows   = result.get('values', [])
 
     agora    = datetime.now(SP)
@@ -58,7 +58,7 @@ def run():
         dt = _parse_dt(data_hora.strip())
         if dt is None:
             sheets.values().update(spreadsheetId=sheet_id,
-                range=f'PushAlert Envios!G{i+2}',
+                range=f'PushAlertEnvios!G{i+2}',
                 valueInputOption='RAW',
                 body={'values': [['erro: data inválida']]}).execute()
             erros.append({'linha': i+2, 'erro': 'data inválida'})
@@ -91,14 +91,14 @@ def run():
 
             notif_id = str(resp_data.get('id', ''))
             sheets.values().update(spreadsheetId=sheet_id,
-                range=f'PushAlert Envios!G{i+2}:H{i+2}',
+                range=f'PushAlertEnvios!G{i+2}:H{i+2}',
                 valueInputOption='RAW',
                 body={'values': [['enviado', notif_id]]}).execute()
             enviados.append({'linha': i+2, 'titulo': titulo, 'id': notif_id})
 
         except Exception as e:
             sheets.values().update(spreadsheetId=sheet_id,
-                range=f'PushAlert Envios!G{i+2}',
+                range=f'PushAlertEnvios!G{i+2}',
                 valueInputOption='RAW',
                 body={'values': [[f'erro: {str(e)[:80]}']]}).execute()
             erros.append({'linha': i+2, 'erro': str(e)})
