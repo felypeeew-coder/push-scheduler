@@ -41,7 +41,7 @@ def run():
 
     svc    = _sheets_service()
     sheets = svc.spreadsheets()
-    result = sheets.values().get(spreadsheetId=sheet_id, range='PushAlert Envios!A2:H').execute()
+    result = sheets.values().get(spreadsheetId=sheet_id, range='PushAlert Envios!A2:H1000').execute()
     rows   = result.get('values', [])
 
     agora    = datetime.now(SP)
