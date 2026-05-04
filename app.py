@@ -34,6 +34,15 @@ def _parse_dt(s):
             continue
     return None
 
+def _parse_horario(s):
+    """Retorna datetime de hoje com o horário HH:MM se o formato for apenas HH:MM."""
+    try:
+        t = datetime.strptime(s.strip(), '%H:%M')
+        agora = datetime.now(SP)
+        return agora.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
+    except ValueError:
+        return None
+
 def _sheets_service():
     raw  = os.environ.get('GSHEETS_SERVICE_ACCOUNT_JSON', '').strip().lstrip('=')
     info = json.loads(raw)
@@ -66,23 +75,33 @@ def run():
 
     rows  = result.get('values', [])
     agora = datetime.now(SP)
+    hoje  = agora.strftime('%Y-%m-%d')
     enviados, erros = [], []
 
     for i, row in enumerate(rows):
         while len(row) < 8:
             row.append('')
-        titulo, mensagem, url, icone, publico, data_hora, status, _ = row
+        titulo, mensagem, url, icone, publico, data_hora, status, ultimo_envio = row
 
         if status.strip().lower() != 'pendente':
             continue
 
+        # Detecta se é recorrente (só HH:MM) ou pontual (data completa)
+        recorrente = False
         dt = _parse_dt(data_hora.strip())
         if dt is None:
-            sheets.values().update(spreadsheetId=sheet_id,
-                range=f'{aba}!G{i+2}',
-                valueInputOption='RAW',
-                body={'values': [['erro: data inválida']]}).execute()
-            erros.append({'linha': i+2, 'erro': 'data inválida'})
+            dt = _parse_horario(data_hora.strip())
+            if dt is None:
+                sheets.values().update(spreadsheetId=sheet_id,
+                    range=f'{aba}!G{i+2}',
+                    valueInputOption='RAW',
+                    body={'values': [['erro: data inválida']]}).execute()
+                erros.append({'linha': i+2, 'erro': 'data inválida'})
+                continue
+            recorrente = True
+
+        # Para recorrentes, pula se já foi enviado hoje
+        if recorrente and ultimo_envio.strip() == hoje:
             continue
 
         if (dt - agora).total_seconds() > 300:
@@ -111,11 +130,21 @@ def run():
                 resp_data = json.loads(resp.read())
 
             notif_id = str(resp_data.get('id', ''))
-            sheets.values().update(spreadsheetId=sheet_id,
-                range=f'{aba}!G{i+2}:H{i+2}',
-                valueInputOption='RAW',
-                body={'values': [['enviado', notif_id]]}).execute()
-            enviados.append({'linha': i+2, 'titulo': titulo, 'id': notif_id})
+
+            if recorrente:
+                # Mantém pendente, registra data do envio em H
+                sheets.values().update(spreadsheetId=sheet_id,
+                    range=f'{aba}!H{i+2}',
+                    valueInputOption='RAW',
+                    body={'values': [[hoje]]}).execute()
+            else:
+                # Pontual: marca como enviado e salva ID
+                sheets.values().update(spreadsheetId=sheet_id,
+                    range=f'{aba}!G{i+2}:H{i+2}',
+                    valueInputOption='RAW',
+                    body={'values': [['enviado', notif_id]]}).execute()
+
+            enviados.append({'linha': i+2, 'titulo': titulo, 'id': notif_id, 'recorrente': recorrente})
 
         except Exception as e:
             sheets.values().update(spreadsheetId=sheet_id,
