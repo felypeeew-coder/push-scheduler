@@ -121,7 +121,8 @@ def run():
                 pa_url = f'https://api.pushalert.co/rest/v1/segment/{seg_id}/send'
             elif publico.strip().startswith('aud:'):
                 aud_id = publico.strip().split(':')[1].strip()
-                pa_url = f'https://api.pushalert.co/rest/v1/audience/{aud_id}/send'
+                pa_url = 'https://api.pushalert.co/rest/v1/send'
+                pa_data += f'&audience_id={urllib.parse.quote(aud_id)}'
             else:
                 pa_url = 'https://api.pushalert.co/rest/v1/send'
 
